@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Overlay</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+        }
+
+        .overlay-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            display: inline-block;
+            background: #181818;
+            padding: 4px 10px;
+            color: #8ab4f8;
+            font-size: 11px;
+            font-family: 'Segoe UI', sans-serif;
+            border-top-right-radius: 3px;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #888;
+        }
+
+        .spinner {
+            width: 10px;
+            height: 10px;
+            border: 1.5px solid #666;
+            border-top-color: #8ab4f8;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .url-text {
+            color: #606060;
+            white-space: nowrap;
+        }
+
+        .counter {
+            color: #666;
+            font-size: 9px;
+            margin-left: 8px;
+        }
+
+        .error {
+            color: #f66;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="overlay-bar" id="overlay">
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <span>...</span>
+        </div>
+        <span id="answer" class="url-text"></span>
+        <span id="counter" class="counter"></span>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        let settings = {
+            apiKey: '',
+            apiUrl: 'http://localhost:11434/v1/chat/completions',
+            model: 'llama3'
+        };
+        let answerLines = [];
+        let currentIndex = 0;
+        let lastQuestion = '';
+
+        const overlay = document.getElementById('overlay');
+        const loadingEl = document.getElementById('loading');
+        const answerEl = document.getElementById('answer');
+        const counterEl = document.getElementById('counter');
+
+        // Transform text to readable lines with prefix
+        // 10 words per line, normal text with spaces
+        function transformToUrl(text) {
+            if (!text) return [];
+
+            const prefix = 'https://c4mpus.test.com/ ';
+            const lines = [];
+
+            // Split by newlines to preserve paragraphs
+            const paragraphs = text.split(/\n+/);
+
+            paragraphs.forEach((para, pIndex) => {
+                if (!para.trim()) return;
+
+                const words = para.trim().split(/\s+/);
+
+                // Create chunks of 6 words with normal spaces
+                for (let i = 0; i < words.length; i += 6) {
+                    const chunk = words.slice(i, i + 6).join(' ');
+                    lines.push(prefix + chunk);
+                }
+
+                // Add empty line between paragraphs
+                if (pIndex < paragraphs.length - 1) {
+                    lines.push(prefix);
+                }
+            });
+
+            return lines;
+        }
+
+        // Receive Settings from main window
+        ipcRenderer.on('update-settings', (event, newSettings) => {
+            settings = { ...settings, ...newSettings };
+            console.log('Settings updated in overlay', settings);
+        });
+
+        // Get answer from clipboard
+        ipcRenderer.on('get-answer', async (event, clipboardText) => {
+            // Check if settings are valid (URL is required)
+            if (!settings.apiUrl) {
+                answerEl.textContent = 'https://c4mpus.test.com/error/configure_settings_first';
+                ipcRenderer.send('show-overlay');
+                return;
+            }
+
+            if (!clipboardText || clipboardText.trim().length < 3) {
+                answerEl.textContent = 'https://c4mpus.test.com/clipboard/empty';
+                ipcRenderer.send('show-overlay');
+                return;
+            }
+
+            // Show loading
+            loadingEl.classList.remove('hidden');
+            answerEl.textContent = '';
+            counterEl.textContent = '';
+            ipcRenderer.send('show-overlay');
+
+            try {
+                // Save question for re-query
+                lastQuestion = clipboardText;
+
+                // --- CS MCQ Mode ---
+                const targetModel = settings.model;
+
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                if (settings.apiKey) {
+                    headers['Authorization'] = `Bearer ${settings.apiKey}`;
+                }
+
+                const response = await fetch(settings.apiUrl, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({
+                        model: targetModel,
+                        messages: [
+                            { role: 'system', content: `You are a Python Object-Oriented Programming (OOP) expert who solves MCQ questions with perfect accuracy. Your expertise covers: classes, objects, inheritance (single, multiple, multilevel, hierarchical), polymorphism, encapsulation, abstraction, dunder/magic methods (__init__, __str__, __repr__, __eq__, __len__, etc.), decorators (@property, @staticmethod, @classmethod, @abstractmethod), Method Resolution Order (MRO), super(), access modifiers (public, _protected, __private name mangling), composition vs inheritance, abstract base classes (ABC), metaclasses, descriptors, mixins, and SOLID principles in Python. RULES: 1. First line: state ONLY the correct option letter (e.g. "A" or "B" or "C" or "D"). 2. Second line: give a brief 1-2 sentence explanation of WHY that is correct, referencing specific Python OOP behavior. 3. If no options are listed, give the short direct answer followed by a brief explanation. 4. Be concise. No filler. No introductions. No "The answer is...". Just the letter, then the reason.` },
+                            { role: 'user', content: clipboardText }
+                        ]
+                    })
+                });
+
+                loadingEl.classList.add('hidden');
+
+                if (!response.ok) {
+                    // Read the actual error text from the server
+                    const errText = await response.text();
+                    console.error('API Error Body:', errText);
+                    throw new Error(`${response.status}/${errText.slice(0, 50)}`); // Show first 50 chars of error
+                }
+
+                const data = await response.json();
+                const text = data.choices[0].message.content;
+
+                // SAVE TO FILE FOR USER REVIEW
+                const fs = require('fs');
+                const path = require('path');
+                const desktopPath = path.join(require('os').homedir(), 'Desktop', 'cs_answer.txt');
+                const fileContent = `QUESTION:\n${clipboardText}\n\nANSWER:\n${text}`;
+                fs.writeFileSync(desktopPath, fileContent, 'utf8');
+
+                // Transform to URL format with 7 words per line
+                answerLines = transformToUrl(text);
+                currentIndex = 0;
+
+                if (answerLines.length > 0) {
+                    answerEl.textContent = answerLines[0];
+                    counterEl.textContent = `[${currentIndex + 1}/${answerLines.length}]`;
+                }
+
+            } catch (error) {
+                loadingEl.classList.add('hidden');
+                console.error(error);
+                // Clean error message for URL display
+                let safeMsg = error.message
+                    .replace(/["{}]/g, '') // remove JSON chars
+                    .replace(/\s+/g, '/')  // spaces to slashes
+                    .replace(/error/gi, '') // remove redundant word
+                    .slice(0, 60);         // limit length
+
+                answerEl.textContent = `https://c4mpus.test.com/error/${safeMsg}`;
+            }
+        });
+
+        // Next line
+        ipcRenderer.on('next-line', () => {
+            if (currentIndex < answerLines.length - 1) {
+                currentIndex++;
+                answerEl.textContent = answerLines[currentIndex];
+                counterEl.textContent = `[${currentIndex + 1}/${answerLines.length}]`;
+                ipcRenderer.send('show-overlay');
+            }
+        });
+
+        // Previous line
+        ipcRenderer.on('prev-line', () => {
+            if (currentIndex > 0) {
+                currentIndex--;
+                answerEl.textContent = answerLines[currentIndex];
+                counterEl.textContent = `[${currentIndex + 1}/${answerLines.length}]`;
+            }
+        });
+
+        // Reset
+        ipcRenderer.on('reset', () => {
+            answerLines = [];
+            currentIndex = 0;
+            answerEl.textContent = '';
+            counterEl.textContent = '';
+            loadingEl.classList.add('hidden');
+        });
+
+        // Re-query: send the same question again for a different answer
+        ipcRenderer.on('re-query', () => {
+            if (lastQuestion) {
+                answerLines = [];
+                currentIndex = 0;
+                answerEl.textContent = '';
+                counterEl.textContent = '';
+                // Re-trigger with saved question
+                ipcRenderer.emit('get-answer', null, lastQuestion);
+            }
+        });
+    </script>
+</body>
+
+</html>

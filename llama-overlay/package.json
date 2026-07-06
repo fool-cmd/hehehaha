@@ -1,0 +1,30 @@
+{
+  "name": "groq-overlay",
+  "version": "2.0.0",
+  "description": "CS MCQ Solver Overlay",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "build": {
+    "appId": "com.groq.overlay",
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "files": [
+      "**/*",
+      "!dist/*",
+      "!*.zip"
+    ]
+  },
+  "author": "You",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}
