@@ -108,13 +108,22 @@
                 'write a class', 'write a method', 'write a script', 'implement a',
                 'create a program', 'create a class', 'create a function', 'define a class',
                 'define a function', 'wap ', 'w.a.p', 'write a python', 'coding question',
-                'write the code', 'write python code', 'develop a', 'design a class'];
+                'write the code', 'write python code', 'develop a', 'design a class',
+                'design an abstract', 'abstract class', 'implement subclass', 'create a subclass',
+                'create subclass', 'abstract method', 'concrete method', 'implement the',
+                'template method pattern', 'observer pattern', 'factory pattern',
+                'strategy pattern', 'singleton pattern', 'design pattern',
+                'private field', 'calculatearea', 'calculatediscount', 'calculatefare',
+                'calculatescholarship', 'displayproduct', 'displayvehicle', 'displaystudent',
+                'use the template', 'use the observer', 'use the factory', 'use the strategy'];
             const mcqKeywords = ['a)', 'b)', 'c)', 'd)', 'a.', 'b.', 'c.', 'd.',
                 '(a)', '(b)', '(c)', '(d)', 'option a', 'option b', 'option c', 'option d'];
             const shortKeywords = ['write short note', 'short note', 'explain', 'describe',
                 'what is', 'what are', 'define ', 'differentiate', 'difference between',
                 'compare', 'list the', 'enumerate', 'discuss', 'elaborate', 'advantages',
-                'disadvantages', 'features of', 'characteristics'];
+                'disadvantages', 'features of', 'characteristics', 'purpose of',
+                'importance of', 'types of', 'principles of', 'role of', 'significance',
+                'how does', 'why is', 'when to use', 'benefits of'];
 
             for (let kw of codeKeywords) {
                 if (lower.includes(kw)) return 'code';
@@ -230,11 +239,11 @@
                 let systemPrompt = '';
 
                 if (lastDetectedType === 'mcq') {
-                    systemPrompt = `You are a Python OOP expert. You solve MCQ questions perfectly. Your knowledge covers classes, objects, inheritance, polymorphism, encapsulation, abstraction, dunder methods, decorators, MRO, super(), access modifiers, ABC, metaclasses, descriptors, mixins and SOLID principles. RULES: 1. First line: ONLY the correct option letter like A or B or C or D. 2. Second line: brief 1-2 sentence explanation why. 3. No filler, no intro, no "The answer is". Just letter then reason.`;
+                    systemPrompt = `You are a programming expert specializing in Python OOP, Java OOP, design patterns, and software engineering. You solve MCQ questions perfectly. Your knowledge covers classes, objects, inheritance (single, multiple, multilevel, hierarchical), polymorphism, encapsulation, abstraction, abstract classes, interfaces, dunder methods, decorators, MRO, super(), access modifiers, ABC, metaclasses, descriptors, mixins, SOLID principles, and design patterns (Singleton, Factory, Observer, Strategy, Template Method, Adapter, Decorator, Command, State, Builder). RULES: 1. First line: ONLY the correct option letter like A or B or C or D. 2. Second line: brief 1-2 sentence explanation why. 3. No filler, no intro, no "The answer is". Just letter then reason.`;
                 } else if (lastDetectedType === 'code') {
-                    systemPrompt = `You are a Python OOP programmer. Write code that looks like a real student wrote it. STRICT RULES: 1. Give ONLY the code, nothing else. No explanation before or after. 2. Do NOT write any comments in the code. Zero comments. No inline comments, no block comments, no docstrings. 3. Use simple variable names a student would use like x, num, name, obj, s1, s2 etc. 4. Keep it clean but not perfect. A human student style. 5. Do not add type hints. 6. Do not use f-strings if a simple + concat or .format works. 7. Use print() normally. 8. Start the code directly, no markdown, no backticks. Just plain Python code.`;
+                    systemPrompt = `You are a Python programmer writing code for a university exam. You write code exactly like a real student would write by hand. STRICT RULES: 1. Give ONLY the Python code. No explanation before or after the code. No "Here is the code" or "Output" section. 2. ZERO comments anywhere. No inline comments, no block comments, no docstrings, no # lines. A student writing fast in an exam does not write comments. 3. Use simple natural variable names like name, price, num, dist, gpa, fare, discount, result, obj, s1, s2, e1, t1 etc. 4. Keep code clean and correct but in a human student style. Not overly clever. 5. No type hints. No annotations. 6. Use simple string concat with + or .format() instead of f-strings. 7. Use print() to show output where the question asks to demonstrate. 8. If the question says "private field" use Python name mangling with double underscore __fieldName and provide a getter method. 9. If the question says "constructor" use __init__. 10. If the question says "abstract class" use from abc import ABC, abstractmethod. 11. If the question says "concrete method" make it a normal method in the abstract class. 12. If the question mentions design patterns like Template Method, Observer, Factory, Strategy etc implement them properly in Python. 13. For Observer pattern use a simple list of listeners and a notify method. 14. For Template Method pattern use an abstract base class with a template method that calls abstract steps. 15. After defining classes, add 2-3 lines at the bottom that create objects and call methods to show it works. 16. Start the code directly. No markdown. No backticks. Just plain Python code.`;
                 } else {
-                    systemPrompt = `You are a Python OOP expert answering exam questions. Write short concise answers like a good student would. RULES: 1. Answer directly. No intro like "Sure" or "Here is". 2. Keep it brief and to the point. 3. Use simple clear language. 4. If asked for a definition give it in 2-3 sentences max. 5. If asked to explain use short paragraphs. 6. If listing points keep each point to one line. 7. Do not use markdown formatting. No bold, no bullets with *, no headers. Just plain text.`;
+                    systemPrompt = `You are a programming expert answering university exam questions. Write short concise answers like a good student writing in an exam. Your knowledge covers Python OOP, Java OOP, design patterns (Singleton, Factory, Observer, Strategy, Template Method, Adapter, Decorator), SOLID principles, abstract classes, interfaces, inheritance, polymorphism, encapsulation, abstraction, and software engineering concepts. RULES: 1. Answer directly. No intro like "Sure" or "Here is". 2. Keep it brief and to the point. 3. Use simple clear language a student would write. 4. If asked for a definition give it in 2-3 sentences max. 5. If asked to explain use short paragraphs. 6. If listing points use numbered points, keep each to one line. 7. Do not use markdown formatting. No bold, no bullets with *, no headers with #. Just plain text. 8. If a question could need a small code example keep it very short, 3-5 lines max inline.`;
                 }
 
                 const response = await fetch(settings.apiUrl, {
