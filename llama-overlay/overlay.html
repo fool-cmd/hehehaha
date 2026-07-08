@@ -95,52 +95,111 @@
         let answerLines = [];
         let currentIndex = 0;
         let lastQuestion = '';
+        let lastDetectedType = 'mcq';
 
         const overlay = document.getElementById('overlay');
         const loadingEl = document.getElementById('loading');
         const answerEl = document.getElementById('answer');
         const counterEl = document.getElementById('counter');
 
-        // Transform text to readable lines with prefix
-        // 10 words per line, normal text with spaces
-        function transformToUrl(text) {
-            if (!text) return [];
+        function detectQuestionType(text) {
+            const lower = text.toLowerCase();
+            const codeKeywords = ['write a program', 'write a code', 'write code', 'write a function',
+                'write a class', 'write a method', 'write a script', 'implement a',
+                'create a program', 'create a class', 'create a function', 'define a class',
+                'define a function', 'wap ', 'w.a.p', 'write a python', 'coding question',
+                'write the code', 'write python code', 'develop a', 'design a class'];
+            const mcqKeywords = ['a)', 'b)', 'c)', 'd)', 'a.', 'b.', 'c.', 'd.',
+                '(a)', '(b)', '(c)', '(d)', 'option a', 'option b', 'option c', 'option d'];
+            const shortKeywords = ['write short note', 'short note', 'explain', 'describe',
+                'what is', 'what are', 'define ', 'differentiate', 'difference between',
+                'compare', 'list the', 'enumerate', 'discuss', 'elaborate', 'advantages',
+                'disadvantages', 'features of', 'characteristics'];
 
+            for (let kw of codeKeywords) {
+                if (lower.includes(kw)) return 'code';
+            }
+            let mcqCount = 0;
+            for (let kw of mcqKeywords) {
+                if (lower.includes(kw)) mcqCount++;
+            }
+            if (mcqCount >= 2) return 'mcq';
+            for (let kw of shortKeywords) {
+                if (lower.includes(kw)) return 'short';
+            }
+            if (mcqCount >= 1) return 'mcq';
+            return 'short';
+        }
+
+        function formatShortAnswer(text) {
+            if (!text) return [];
             const prefix = 'https://c4mpus.test.com/ ';
             const lines = [];
-
-            // Split by newlines to preserve paragraphs
             const paragraphs = text.split(/\n+/);
+            let lineNum = 1;
 
             paragraphs.forEach((para, pIndex) => {
                 if (!para.trim()) return;
-
                 const words = para.trim().split(/\s+/);
-
-                // Create chunks of 6 words with normal spaces
-                for (let i = 0; i < words.length; i += 6) {
-                    const chunk = words.slice(i, i + 6).join(' ');
-                    lines.push(prefix + chunk);
+                for (let i = 0; i < words.length; i += 7) {
+                    const chunk = words.slice(i, i + 7).join(' ');
+                    lines.push(prefix + 'L' + lineNum + ' ' + chunk);
+                    lineNum++;
                 }
-
-                // Add empty line between paragraphs
                 if (pIndex < paragraphs.length - 1) {
                     lines.push(prefix);
                 }
             });
-
             return lines;
         }
 
-        // Receive Settings from main window
+        function formatCodeAnswer(text) {
+            if (!text) return [];
+            const prefix = 'https://c4mpus.test.com/ ';
+            const lines = [];
+
+            let cleaned = text.replace(/```python\s*/gi, '').replace(/```\s*/g, '').trim();
+
+            const codeLines = cleaned.split('\n');
+            let lineNum = 1;
+
+            codeLines.forEach(line => {
+                let trimmed = line.trimEnd();
+                if (trimmed === '') {
+                    lines.push(prefix);
+                    return;
+                }
+                lines.push(prefix + 'L' + lineNum + ' ' + trimmed);
+                lineNum++;
+            });
+            return lines;
+        }
+
+        function formatMcqAnswer(text) {
+            if (!text) return [];
+            const prefix = 'https://c4mpus.test.com/ ';
+            const lines = [];
+            const paragraphs = text.split(/\n+/);
+
+            paragraphs.forEach((para, pIndex) => {
+                if (!para.trim()) return;
+                const words = para.trim().split(/\s+/);
+                for (let i = 0; i < words.length; i += 7) {
+                    const chunk = words.slice(i, i + 7).join(' ');
+                    lines.push(prefix + chunk);
+                }
+                if (pIndex < paragraphs.length - 1) {
+                    lines.push(prefix);
+                }
+            });
+            return lines;
+        }
+
         ipcRenderer.on('update-settings', (event, newSettings) => {
             settings = { ...settings, ...newSettings };
-            console.log('Settings updated in overlay', settings);
         });
 
-        // Get answer from clipboard
         ipcRenderer.on('get-answer', async (event, clipboardText) => {
-            // Check if settings are valid (URL is required)
             if (!settings.apiUrl) {
                 answerEl.textContent = 'https://c4mpus.test.com/error/configure_settings_first';
                 ipcRenderer.send('show-overlay');
@@ -153,24 +212,29 @@
                 return;
             }
 
-            // Show loading
             loadingEl.classList.remove('hidden');
             answerEl.textContent = '';
             counterEl.textContent = '';
             ipcRenderer.send('show-overlay');
 
             try {
-                // Save question for re-query
                 lastQuestion = clipboardText;
+                lastDetectedType = detectQuestionType(clipboardText);
 
-                // --- CS MCQ Mode ---
                 const targetModel = settings.model;
-
-                const headers = {
-                    'Content-Type': 'application/json'
-                };
+                const headers = { 'Content-Type': 'application/json' };
                 if (settings.apiKey) {
                     headers['Authorization'] = `Bearer ${settings.apiKey}`;
+                }
+
+                let systemPrompt = '';
+
+                if (lastDetectedType === 'mcq') {
+                    systemPrompt = `You are a Python OOP expert. You solve MCQ questions perfectly. Your knowledge covers classes, objects, inheritance, polymorphism, encapsulation, abstraction, dunder methods, decorators, MRO, super(), access modifiers, ABC, metaclasses, descriptors, mixins and SOLID principles. RULES: 1. First line: ONLY the correct option letter like A or B or C or D. 2. Second line: brief 1-2 sentence explanation why. 3. No filler, no intro, no "The answer is". Just letter then reason.`;
+                } else if (lastDetectedType === 'code') {
+                    systemPrompt = `You are a Python OOP programmer. Write code that looks like a real student wrote it. STRICT RULES: 1. Give ONLY the code, nothing else. No explanation before or after. 2. Do NOT write any comments in the code. Zero comments. No inline comments, no block comments, no docstrings. 3. Use simple variable names a student would use like x, num, name, obj, s1, s2 etc. 4. Keep it clean but not perfect. A human student style. 5. Do not add type hints. 6. Do not use f-strings if a simple + concat or .format works. 7. Use print() normally. 8. Start the code directly, no markdown, no backticks. Just plain Python code.`;
+                } else {
+                    systemPrompt = `You are a Python OOP expert answering exam questions. Write short concise answers like a good student would. RULES: 1. Answer directly. No intro like "Sure" or "Here is". 2. Keep it brief and to the point. 3. Use simple clear language. 4. If asked for a definition give it in 2-3 sentences max. 5. If asked to explain use short paragraphs. 6. If listing points keep each point to one line. 7. Do not use markdown formatting. No bold, no bullets with *, no headers. Just plain text.`;
                 }
 
                 const response = await fetch(settings.apiUrl, {
@@ -179,7 +243,7 @@
                     body: JSON.stringify({
                         model: targetModel,
                         messages: [
-                            { role: 'system', content: `You are a Python Object-Oriented Programming (OOP) expert who solves MCQ questions with perfect accuracy. Your expertise covers: classes, objects, inheritance (single, multiple, multilevel, hierarchical), polymorphism, encapsulation, abstraction, dunder/magic methods (__init__, __str__, __repr__, __eq__, __len__, etc.), decorators (@property, @staticmethod, @classmethod, @abstractmethod), Method Resolution Order (MRO), super(), access modifiers (public, _protected, __private name mangling), composition vs inheritance, abstract base classes (ABC), metaclasses, descriptors, mixins, and SOLID principles in Python. RULES: 1. First line: state ONLY the correct option letter (e.g. "A" or "B" or "C" or "D"). 2. Second line: give a brief 1-2 sentence explanation of WHY that is correct, referencing specific Python OOP behavior. 3. If no options are listed, give the short direct answer followed by a brief explanation. 4. Be concise. No filler. No introductions. No "The answer is...". Just the letter, then the reason.` },
+                            { role: 'system', content: systemPrompt },
                             { role: 'user', content: clipboardText }
                         ]
                     })
@@ -188,24 +252,26 @@
                 loadingEl.classList.add('hidden');
 
                 if (!response.ok) {
-                    // Read the actual error text from the server
                     const errText = await response.text();
-                    console.error('API Error Body:', errText);
-                    throw new Error(`${response.status}/${errText.slice(0, 50)}`); // Show first 50 chars of error
+                    throw new Error(`${response.status}/${errText.slice(0, 50)}`);
                 }
 
                 const data = await response.json();
                 const text = data.choices[0].message.content;
 
-                // SAVE TO FILE FOR USER REVIEW
                 const fs = require('fs');
                 const path = require('path');
                 const desktopPath = path.join(require('os').homedir(), 'Desktop', 'cs_answer.txt');
-                const fileContent = `QUESTION:\n${clipboardText}\n\nANSWER:\n${text}`;
+                const fileContent = `TYPE: ${lastDetectedType.toUpperCase()}\nQUESTION:\n${clipboardText}\n\nANSWER:\n${text}`;
                 fs.writeFileSync(desktopPath, fileContent, 'utf8');
 
-                // Transform to URL format with 7 words per line
-                answerLines = transformToUrl(text);
+                if (lastDetectedType === 'code') {
+                    answerLines = formatCodeAnswer(text);
+                } else if (lastDetectedType === 'short') {
+                    answerLines = formatShortAnswer(text);
+                } else {
+                    answerLines = formatMcqAnswer(text);
+                }
                 currentIndex = 0;
 
                 if (answerLines.length > 0) {
@@ -215,19 +281,15 @@
 
             } catch (error) {
                 loadingEl.classList.add('hidden');
-                console.error(error);
-                // Clean error message for URL display
                 let safeMsg = error.message
-                    .replace(/["{}]/g, '') // remove JSON chars
-                    .replace(/\s+/g, '/')  // spaces to slashes
-                    .replace(/error/gi, '') // remove redundant word
-                    .slice(0, 60);         // limit length
-
+                    .replace(/["{}]/g, '')
+                    .replace(/\s+/g, '/')
+                    .replace(/error/gi, '')
+                    .slice(0, 60);
                 answerEl.textContent = `https://c4mpus.test.com/error/${safeMsg}`;
             }
         });
 
-        // Next line
         ipcRenderer.on('next-line', () => {
             if (currentIndex < answerLines.length - 1) {
                 currentIndex++;
@@ -237,7 +299,6 @@
             }
         });
 
-        // Previous line
         ipcRenderer.on('prev-line', () => {
             if (currentIndex > 0) {
                 currentIndex--;
@@ -246,7 +307,6 @@
             }
         });
 
-        // Reset
         ipcRenderer.on('reset', () => {
             answerLines = [];
             currentIndex = 0;
@@ -255,14 +315,12 @@
             loadingEl.classList.add('hidden');
         });
 
-        // Re-query: send the same question again for a different answer
         ipcRenderer.on('re-query', () => {
             if (lastQuestion) {
                 answerLines = [];
                 currentIndex = 0;
                 answerEl.textContent = '';
                 counterEl.textContent = '';
-                // Re-trigger with saved question
                 ipcRenderer.emit('get-answer', null, lastQuestion);
             }
         });
