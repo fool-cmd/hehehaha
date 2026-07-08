@@ -5,32 +5,34 @@ let mainWindow;
 let overlayWindow;
 let tray;
 
-function createMainWindow() {
-  mainWindow = new BrowserWindow({
-    width: 340,
-    height: 380,
-    resizable: false,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    autoHideMenuBar: true,
-    skipTaskbar: true,
-    icon: require('electron').nativeImage.createEmpty(),
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
-  });
+function createMainWindow() {\r
+  mainWindow = new BrowserWindow({\r
+    width: 340,\r
+    height: 380,\r
+    resizable: false,\r
+    frame: false,\r
+    transparent: true,\r
+    alwaysOnTop: true,\r
+    autoHideMenuBar: true,\r
+    skipTaskbar: true,\r
+    show: false,\r
+    icon: require('electron').nativeImage.createEmpty(),\r
+    webPreferences: {\r
+      nodeIntegration: true,\r
+      contextIsolation: false\r
+    }\r
+  });\r
+\r
+  mainWindow.loadFile('index.html');\r
+\r
+  mainWindow.on('close', (event) => {\r
+    if (!app.isQuitting) {\r
+      event.preventDefault();\r
+      mainWindow.hide();\r
+    }\r
+  });\r
+}\r
 
-  mainWindow.loadFile('index.html');
-
-  mainWindow.on('close', (event) => {
-    if (!app.isQuitting) {
-      event.preventDefault();
-      mainWindow.hide();
-    }
-  });
-}
 
 function createOverlayWindow() {
   const { height } = screen.getPrimaryDisplay().workAreaSize;
